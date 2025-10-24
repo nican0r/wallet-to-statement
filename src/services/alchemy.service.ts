@@ -64,60 +64,64 @@ export class AlchemyService {
     blockNumber?: number
   ): Promise<TokenBalance[]> {
     const tokenAddresses = tokens
-      .filter((t) => t.address !== 'ETH')
+      .filter((t) => t.address !== 'NATIVE')
       .map((t) => t.address);
 
     const blockTag = blockNumber ? decimalToHex(blockNumber) : 'latest';
 
-    // Get ERC20 token balances
-    const tokenBalancesResponse = await this.makeRequest('alchemy_getTokenBalances', [
-      walletAddress,
-      tokenAddresses,
-    ], chain);
-
     const balances: TokenBalance[] = [];
 
-    // Get ETH balance if ETH is in the selected tokens
-    const ethToken = tokens.find((t) => t.address === 'ETH');
-    if (ethToken) {
-      const ethBalanceResponse = await this.makeRequest('eth_getBalance', [
+    // Get native token balance (ETH, MATIC, BNB, etc.)
+    const nativeToken = tokens.find((t) => t.address === 'NATIVE');
+    if (nativeToken) {
+      const nativeBalanceResponse = await this.makeRequest('eth_getBalance', [
         walletAddress,
         blockTag,
       ], chain);
 
-      const ethBalance = ethBalanceResponse.result;
-      const formattedEthBalance = parseTokenBalance(
-        parseInt(ethBalance, 16).toString(),
-        18
+      const nativeBalance = nativeBalanceResponse.result;
+      const formattedNativeBalance = parseTokenBalance(
+        parseInt(nativeBalance, 16).toString(),
+        nativeToken.decimals
       );
 
-      balances.push({
-        token: ethToken,
-        balance: parseInt(ethBalance, 16).toString(),
-        formattedBalance: formattedEthBalance,
-        usdValue: 0, // Will be filled by pricing service
-        pricePerToken: 0, // Will be filled by pricing service
-      });
+      if (formattedNativeBalance > 0) {
+        balances.push({
+          token: nativeToken,
+          balance: parseInt(nativeBalance, 16).toString(),
+          formattedBalance: formattedNativeBalance,
+          usdValue: 0, // Will be filled by pricing service
+          pricePerToken: 0, // Will be filled by pricing service
+        });
+      }
     }
 
-    // Process ERC20 token balances
-    for (const tokenBalance of tokenBalancesResponse.result.tokenBalances) {
-      const token = tokens.find(
-        (t) => t.address.toLowerCase() === tokenBalance.contractAddress.toLowerCase()
-      );
+    // Get ERC20 token balances (if any)
+    if (tokenAddresses.length > 0) {
+      const tokenBalancesResponse = await this.makeRequest('alchemy_getTokenBalances', [
+        walletAddress,
+        tokenAddresses,
+      ], chain);
 
-      if (token && tokenBalance.tokenBalance) {
-        const balance = parseInt(tokenBalance.tokenBalance, 16).toString();
-        const formattedBalance = parseTokenBalance(balance, token.decimals);
+      // Process ERC20 token balances
+      for (const tokenBalance of tokenBalancesResponse.result.tokenBalances) {
+        const token = tokens.find(
+          (t) => t.address.toLowerCase() === tokenBalance.contractAddress.toLowerCase()
+        );
 
-        if (formattedBalance > 0) {
-          balances.push({
-            token,
-            balance,
-            formattedBalance,
-            usdValue: 0, // Will be filled by pricing service
-            pricePerToken: 0, // Will be filled by pricing service
-          });
+        if (token && tokenBalance.tokenBalance) {
+          const balance = parseInt(tokenBalance.tokenBalance, 16).toString();
+          const formattedBalance = parseTokenBalance(balance, token.decimals);
+
+          if (formattedBalance > 0) {
+            balances.push({
+              token,
+              balance,
+              formattedBalance,
+              usdValue: 0, // Will be filled by pricing service
+              pricePerToken: 0, // Will be filled by pricing service
+            });
+          }
         }
       }
     }

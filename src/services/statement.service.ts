@@ -2,7 +2,7 @@ import { alchemyService } from './alchemy.service';
 import { pricingService } from './pricing.service';
 import { StatementData, StatementFormData } from '../types/statement.types';
 import { Transaction, AlchemyAssetTransfer } from '../types/transaction.types';
-import { Token, TokenBalance } from '../types/wallet.types';
+import { Token, TokenBalance, getTokensForChain } from '../types/wallet.types';
 import {
   timestampToDate,
   calculateRunningBalances,
@@ -25,11 +25,21 @@ export class StatementService {
       console.log(`\n--- Processing ${chain.name} ---`);
 
       try {
-        // Step 1: Fetch token balances for this chain
-        console.log(`Fetching balances on ${chain.name}...`);
+        // Step 1: Get chain-specific tokens based on user selection
+        const chainTokens = getTokensForChain(chain.id);
+
+        // Filter to only the token symbols that the user selected
+        const selectedSymbols = selectedTokens.map(t => t.symbol);
+        const tokensForThisChain = chainTokens.filter(t =>
+          selectedSymbols.includes(t.symbol)
+        );
+
+        console.log(`Fetching balances for ${tokensForThisChain.length} tokens on ${chain.name}...`);
+
+        // Step 2: Fetch token balances for this chain
         const chainClosingBalances = await alchemyService.getTokenBalances(
           walletAddress,
-          selectedTokens,
+          tokensForThisChain,
           chain
         );
 
@@ -42,7 +52,7 @@ export class StatementService {
         allClosingBalances.push(...balancesWithChain);
         console.log(`Fetched ${chainClosingBalances.length} token balances on ${chain.name}`);
 
-        // Step 2: Fetch transactions for this chain
+        // Step 3: Fetch transactions for this chain
         const latestBlock = await alchemyService.getLatestBlock(chain);
         const fromBlock = Math.max(0, latestBlock - 100000); // Go back ~14 days
 
@@ -52,7 +62,7 @@ export class StatementService {
           walletAddress,
           fromBlock,
           latestBlock,
-          selectedTokens,
+          tokensForThisChain,
           chain
         );
 
@@ -73,7 +83,7 @@ export class StatementService {
         const chainTransactions = await this.processTransactions(
           filteredTransfers,
           walletAddress,
-          selectedTokens,
+          tokensForThisChain,
           chain
         );
 
@@ -172,7 +182,7 @@ export class StatementService {
     const enrichedBalances: TokenBalance[] = [];
 
     for (const balance of balances) {
-      const price = await pricingService.getHistoricalPrice(balance.token.address, date);
+      const price = await pricingService.getHistoricalPrice(balance.token.coingeckoId, date);
       const usdValue = balance.formattedBalance * price;
 
       enrichedBalances.push({
@@ -201,10 +211,10 @@ export class StatementService {
         let decimals: number = 18;
 
         if (transfer.category === 'external') {
-          // ETH transfer
-          token = selectedTokens.find((t) => t.address === 'ETH');
+          // Native token transfer (ETH, MATIC, etc.)
+          token = selectedTokens.find((t) => t.address === 'NATIVE');
           value = (transfer.value || 0).toString();
-          decimals = 18;
+          decimals = token?.decimals || 18;
         } else if (transfer.category === 'erc20' && transfer.rawContract.address) {
           // ERC20 transfer
           token = selectedTokens.find(
@@ -240,7 +250,7 @@ export class StatementService {
         );
 
         // Get price at transaction time
-        const price = await pricingService.getHistoricalPrice(token.address, timestamp);
+        const price = await pricingService.getHistoricalPrice(token.coingeckoId, timestamp);
         const usdValue = formattedValue * price;
 
         transactions.push({
