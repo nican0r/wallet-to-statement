@@ -1,3 +1,5 @@
+import { Chain } from './chain.types';
+
 export interface Token {
   address: string;
   symbol: string;
@@ -12,6 +14,7 @@ export interface TokenBalance {
   formattedBalance: number; // Formatted balance as number
   usdValue: number;
   pricePerToken: number;
+  chain?: Chain; // Optional chain field for multi-chain support
 }
 
 export interface WalletData {

@@ -147,6 +147,12 @@ export const BankStatementPDF: React.FC<BankStatementPDFProps> = ({ data }) => {
             <Text style={styles.value}>{data.walletAddress}</Text>
           </View>
           <View style={styles.row}>
+            <Text style={styles.label}>Networks:</Text>
+            <Text style={styles.value}>
+              {data.chains.map(c => c.name).join(', ')}
+            </Text>
+          </View>
+          <View style={styles.row}>
             <Text style={styles.label}>Statement Period:</Text>
             <Text style={styles.value}>
               {formatDate(data.statementPeriod.startDate)} to{' '}
@@ -166,10 +172,11 @@ export const BankStatementPDF: React.FC<BankStatementPDFProps> = ({ data }) => {
             </Text>
           </View>
 
-          {data.openingBalance.tokens.map((token) => (
-            <View key={`open-${token.token.symbol}`} style={styles.tokenBalance}>
+          {data.openingBalance.tokens.map((token, idx) => (
+            <View key={`open-${token.token.symbol}-${idx}`} style={styles.tokenBalance}>
               <Text>
                 {formatTokenAmount(token.formattedBalance)} {token.token.symbol}
+                {token.chain && ` (${token.chain.name})`}
               </Text>
               <Text>{formatCurrency(token.usdValue)}</Text>
             </View>
@@ -182,10 +189,11 @@ export const BankStatementPDF: React.FC<BankStatementPDFProps> = ({ data }) => {
             </Text>
           </View>
 
-          {data.closingBalance.tokens.map((token) => (
-            <View key={`close-${token.token.symbol}`} style={styles.tokenBalance}>
+          {data.closingBalance.tokens.map((token, idx) => (
+            <View key={`close-${token.token.symbol}-${idx}`} style={styles.tokenBalance}>
               <Text>
                 {formatTokenAmount(token.formattedBalance)} {token.token.symbol}
+                {token.chain && ` (${token.chain.name})`}
               </Text>
               <Text>{formatCurrency(token.usdValue)}</Text>
             </View>
@@ -214,6 +222,7 @@ export const BankStatementPDF: React.FC<BankStatementPDFProps> = ({ data }) => {
                 <Text style={styles.col2}>
                   {tx.type === 'credit' ? 'Received' : 'Sent'}{' '}
                   {formatTokenAmount(tx.formattedValue, 4)} {tx.token.symbol}
+                  {' '}({tx.chain.name})
                 </Text>
                 <Text style={styles.col3}>
                   {tx.type === 'debit' ? formatCurrency(tx.usdValue) : '-'}

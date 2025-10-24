@@ -1,4 +1,5 @@
 import { Token } from './wallet.types';
+import { Chain } from './chain.types';
 
 export type TransactionType = 'credit' | 'debit';
 
@@ -11,6 +12,7 @@ export interface Transaction {
   value: string; // Raw value
   formattedValue: number; // Formatted value
   token: Token;
+  chain: Chain;
   type: TransactionType; // credit (incoming) or debit (outgoing)
   usdValue: number;
   pricePerToken: number;

@@ -3,9 +3,9 @@ import { Token, TokenBalance } from '../types/wallet.types';
 import { AlchemyAssetTransfersResponse, AlchemyAssetTransfer } from '../types/transaction.types';
 import { parseTokenBalance, formatBlockNumber } from '../utils/formatters';
 import { decimalToHex } from '../utils/calculations';
+import { Chain, getAlchemyUrl } from '../types/chain.types';
 
 const ALCHEMY_API_KEY = import.meta.env.VITE_ALCHEMY_API_KEY;
-const ALCHEMY_BASE_URL = `https://eth-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}`;
 
 interface AlchemyTokenBalance {
   contractAddress: string;
@@ -27,9 +27,10 @@ interface BlockResponse {
 }
 
 export class AlchemyService {
-  private async makeRequest(method: string, params: any[]) {
+  private async makeRequest(method: string, params: any[], chain: Chain) {
     try {
-      const response = await axios.post(ALCHEMY_BASE_URL, {
+      const url = getAlchemyUrl(chain.id, ALCHEMY_API_KEY);
+      const response = await axios.post(url, {
         jsonrpc: '2.0',
         id: 1,
         method,
@@ -42,23 +43,24 @@ export class AlchemyService {
 
       return response.data;
     } catch (error) {
-      console.error('Alchemy API error:', error);
+      console.error(`Alchemy API error for ${chain.name}:`, error);
       throw error;
     }
   }
 
-  async getBlockByNumber(blockNumber: string): Promise<any> {
-    return this.makeRequest('eth_getBlockByNumber', [blockNumber, false]);
+  async getBlockByNumber(blockNumber: string, chain: Chain): Promise<any> {
+    return this.makeRequest('eth_getBlockByNumber', [blockNumber, false], chain);
   }
 
-  async getLatestBlock(): Promise<number> {
-    const response = await this.makeRequest('eth_blockNumber', []);
+  async getLatestBlock(chain: Chain): Promise<number> {
+    const response = await this.makeRequest('eth_blockNumber', [], chain);
     return formatBlockNumber(response.result);
   }
 
   async getTokenBalances(
     walletAddress: string,
     tokens: Token[],
+    chain: Chain,
     blockNumber?: number
   ): Promise<TokenBalance[]> {
     const tokenAddresses = tokens
@@ -71,7 +73,7 @@ export class AlchemyService {
     const tokenBalancesResponse = await this.makeRequest('alchemy_getTokenBalances', [
       walletAddress,
       tokenAddresses,
-    ]);
+    ], chain);
 
     const balances: TokenBalance[] = [];
 
@@ -81,7 +83,7 @@ export class AlchemyService {
       const ethBalanceResponse = await this.makeRequest('eth_getBalance', [
         walletAddress,
         blockTag,
-      ]);
+      ], chain);
 
       const ethBalance = ethBalanceResponse.result;
       const formattedEthBalance = parseTokenBalance(
@@ -127,7 +129,8 @@ export class AlchemyService {
     walletAddress: string,
     fromBlock: number,
     toBlock: number,
-    tokens: Token[]
+    tokens: Token[],
+    chain: Chain
   ): Promise<AlchemyAssetTransfer[]> {
     const allTransfers: AlchemyAssetTransfer[] = [];
     let pageKey: string | undefined;
@@ -160,7 +163,8 @@ export class AlchemyService {
       for (const request of requests) {
         const response: AlchemyAssetTransfersResponse = await this.makeRequest(
           'alchemy_getAssetTransfers',
-          [request]
+          [request],
+          chain
         );
 
         if (response.result && response.result.transfers) {
@@ -195,8 +199,8 @@ export class AlchemyService {
     return uniqueTransfers;
   }
 
-  async getBlockTimestamp(blockNumber: number): Promise<number> {
-    const response = await this.getBlockByNumber(decimalToHex(blockNumber));
+  async getBlockTimestamp(blockNumber: number, chain: Chain): Promise<number> {
+    const response = await this.getBlockByNumber(decimalToHex(blockNumber), chain);
     return parseInt(response.result.timestamp, 16);
   }
 }

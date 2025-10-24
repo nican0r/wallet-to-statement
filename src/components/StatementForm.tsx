@@ -5,6 +5,8 @@ import { SUPPORTED_TOKENS } from '../types/wallet.types';
 import { StatementFormData } from '../types/statement.types';
 import { validateStatementForm } from '../utils/validators';
 import { format } from 'date-fns';
+import { ChainSelector } from './ChainSelector';
+import { Chain, DEFAULT_CHAINS } from '../types/chain.types';
 
 interface StatementFormProps {
   onSubmit: (data: StatementFormData) => void;
@@ -19,6 +21,7 @@ export const StatementForm: React.FC<StatementFormProps> = ({ onSubmit, loading 
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
   const [selectedTokens, setSelectedTokens] = useState<string[]>(['ETH']);
+  const [selectedChains, setSelectedChains] = useState<Chain[]>(DEFAULT_CHAINS);
   const [errors, setErrors] = useState<string[]>([]);
 
   // Initialize form with previous data if available
@@ -30,6 +33,7 @@ export const StatementForm: React.FC<StatementFormProps> = ({ onSubmit, loading 
       setStartDate(format(initialData.statementPeriod.startDate, 'yyyy-MM-dd'));
       setEndDate(format(initialData.statementPeriod.endDate, 'yyyy-MM-dd'));
       setSelectedTokens(initialData.selectedTokens.map(t => t.address));
+      setSelectedChains(initialData.selectedChains);
     }
   }, [initialData]);
 
@@ -73,6 +77,7 @@ export const StatementForm: React.FC<StatementFormProps> = ({ onSubmit, loading 
         endDate: new Date(endDate),
       },
       selectedTokens: SUPPORTED_TOKENS.filter((t) => selectedTokens.includes(t.address)),
+      selectedChains,
     };
 
     onSubmit(statementFormData);
@@ -133,6 +138,14 @@ export const StatementForm: React.FC<StatementFormProps> = ({ onSubmit, loading 
             disabled={loading}
           />
         </div>
+      </div>
+
+      <div className="bg-gray-800 p-6 rounded-lg shadow-lg">
+        <ChainSelector
+          selectedChains={selectedChains}
+          onChange={setSelectedChains}
+          disabled={loading}
+        />
       </div>
 
       <div className="bg-gray-800 p-6 rounded-lg shadow-lg">

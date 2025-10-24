@@ -12,77 +12,103 @@ import { parseTokenBalance } from '../utils/formatters';
 
 export class StatementService {
   async generateStatement(formData: StatementFormData): Promise<StatementData> {
-    const { accountHolder, walletAddress, statementPeriod, selectedTokens } = formData;
+    const { accountHolder, walletAddress, statementPeriod, selectedTokens, selectedChains } = formData;
 
-    // Step 1: Get current balances (we'll use latest for closing balance)
-    // For simplicity and reliability, we'll fetch a broader range of transactions
-    // and filter by date, rather than trying to estimate exact block numbers
+    console.log(`Fetching data from ${selectedChains.length} chain(s)...`);
 
-    console.log('Fetching current wallet balances...');
+    // Aggregate data from all chains
+    const allClosingBalances: TokenBalance[] = [];
+    const allTransactions: Transaction[] = [];
 
-    // Step 2: Fetch token balances (use latest for closing balance)
-    const closingBalances = await alchemyService.getTokenBalances(
-      walletAddress,
-      selectedTokens
-    );
+    // Process each chain
+    for (const chain of selectedChains) {
+      console.log(`\n--- Processing ${chain.name} ---`);
 
-    console.log('Fetched current balances:', closingBalances);
+      try {
+        // Step 1: Fetch token balances for this chain
+        console.log(`Fetching balances on ${chain.name}...`);
+        const chainClosingBalances = await alchemyService.getTokenBalances(
+          walletAddress,
+          selectedTokens,
+          chain
+        );
 
-    // Step 3: Fetch historical prices for opening and closing balances
+        // Add chain info to each balance
+        const balancesWithChain = chainClosingBalances.map(balance => ({
+          ...balance,
+          chain,
+        }));
+
+        allClosingBalances.push(...balancesWithChain);
+        console.log(`Fetched ${chainClosingBalances.length} token balances on ${chain.name}`);
+
+        // Step 2: Fetch transactions for this chain
+        const latestBlock = await alchemyService.getLatestBlock(chain);
+        const fromBlock = Math.max(0, latestBlock - 100000); // Go back ~14 days
+
+        console.log(`Fetching transactions on ${chain.name} from block ${fromBlock} to ${latestBlock}...`);
+
+        const rawTransfers = await alchemyService.getAssetTransfers(
+          walletAddress,
+          fromBlock,
+          latestBlock,
+          selectedTokens,
+          chain
+        );
+
+        console.log(`Fetched ${rawTransfers.length} transactions on ${chain.name}`);
+
+        // Step 3: Filter transactions by date range
+        const startTime = statementPeriod.startDate.getTime();
+        const endTime = statementPeriod.endDate.getTime();
+
+        const filteredTransfers = rawTransfers.filter((transfer) => {
+          const txTimestamp = parseInt(transfer.metadata.blockTimestamp, 16) * 1000;
+          return txTimestamp >= startTime && txTimestamp <= endTime;
+        });
+
+        console.log(`Filtered to ${filteredTransfers.length} transactions in date range on ${chain.name}`);
+
+        // Step 4: Process transactions for this chain
+        const chainTransactions = await this.processTransactions(
+          filteredTransfers,
+          walletAddress,
+          selectedTokens,
+          chain
+        );
+
+        allTransactions.push(...chainTransactions);
+      } catch (error) {
+        console.error(`Error processing ${chain.name}:`, error);
+        // Continue with other chains even if one fails
+      }
+    }
+
+    console.log(`\nTotal balances across all chains: ${allClosingBalances.length}`);
+    console.log(`Total transactions across all chains: ${allTransactions.length}`);
+
+    // Step 5: Enrich balances with prices
+    console.log('\nEnriching balances with historical prices...');
     const closingBalancesWithPrices = await this.enrichBalancesWithPrices(
-      closingBalances,
+      allClosingBalances,
       statementPeriod.endDate
     );
 
-    // Step 4: Fetch ALL transactions (we'll filter by date later)
-    // Using a reasonable block range - last 100,000 blocks (~14 days)
-    const latestBlock = await alchemyService.getLatestBlock();
-    const fromBlock = Math.max(0, latestBlock - 100000); // Go back ~14 days
-
-    console.log(`Fetching transactions from block ${fromBlock} to ${latestBlock}...`);
-
-    const rawTransfers = await alchemyService.getAssetTransfers(
-      walletAddress,
-      fromBlock,
-      latestBlock,
-      selectedTokens
-    );
-
-    console.log(`Fetched ${rawTransfers.length} transactions`);
-
-    // Step 5: Filter transactions by date range
-    const startTime = statementPeriod.startDate.getTime();
-    const endTime = statementPeriod.endDate.getTime();
-
-    const filteredTransfers = rawTransfers.filter((transfer) => {
-      const txTimestamp = parseInt(transfer.metadata.blockTimestamp, 16) * 1000;
-      return txTimestamp >= startTime && txTimestamp <= endTime;
-    });
-
-    console.log(`Filtered to ${filteredTransfers.length} transactions in date range`);
-
-    // Step 6: Process transactions
-    const transactions = await this.processTransactions(
-      filteredTransfers,
-      walletAddress,
-      selectedTokens
-    );
-
     // Sort transactions by timestamp
-    transactions.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+    allTransactions.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
 
-    // Step 7: Calculate opening balance by working backwards from closing balance
+    // Step 6: Calculate opening balance by working backwards from closing balance
     const closingBalanceTotal = closingBalancesWithPrices.reduce(
       (sum, b) => sum + b.usdValue,
       0
     );
 
     // Calculate net change from transactions
-    const totalDeposits = transactions
+    const totalDeposits = allTransactions
       .filter((tx) => tx.type === 'credit')
       .reduce((sum, tx) => sum + tx.usdValue, 0);
 
-    const totalWithdrawals = transactions
+    const totalWithdrawals = allTransactions
       .filter((tx) => tx.type === 'debit')
       .reduce((sum, tx) => sum + tx.usdValue, 0);
 
@@ -105,22 +131,23 @@ export class StatementService {
     });
 
     const transactionsWithRunningBalance = calculateRunningBalances(
-      transactions,
+      allTransactions,
       openingBalanceTotal
     );
 
-    // Step 8: Calculate summary
+    // Step 7: Calculate summary
     const summary = calculateTransactionSummary(
       transactionsWithRunningBalance,
       openingBalanceTotal,
       closingBalanceTotal
     );
 
-    // Step 9: Build statement data
+    // Step 8: Build statement data
     const statementData: StatementData = {
       accountHolder,
       walletAddress,
       statementPeriod,
+      chains: selectedChains,
       tokens: selectedTokens,
       openingBalance: {
         tokens: openingBalances,
@@ -161,7 +188,8 @@ export class StatementService {
   private async processTransactions(
     rawTransfers: AlchemyAssetTransfer[],
     walletAddress: string,
-    selectedTokens: Token[]
+    selectedTokens: Token[],
+    chain: any
   ): Promise<Transaction[]> {
     const transactions: Transaction[] = [];
 
@@ -224,6 +252,7 @@ export class StatementService {
           value,
           formattedValue,
           token,
+          chain,
           type,
           usdValue,
           pricePerToken: price,
