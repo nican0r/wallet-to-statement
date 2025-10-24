@@ -9,10 +9,13 @@ type AppState = 'form' | 'generating' | 'preview';
 function App() {
   const [appState, setAppState] = useState<AppState>('form');
   const [statementData, setStatementData] = useState<StatementData | null>(null);
+  const [formData, setFormData] = useState<StatementFormData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState<string>('');
 
   const handleFormSubmit = async (formData: StatementFormData) => {
+    // Store the form data before attempting to generate
+    setFormData(formData);
     setAppState('generating');
     setError(null);
     setProgress('Initializing...');
@@ -44,6 +47,7 @@ function App() {
           : 'An error occurred while generating the statement. Please try again.'
       );
       setAppState('form');
+      // Form data is retained, so user can try again
     }
   };
 
@@ -77,7 +81,11 @@ function App() {
 
         {/* Form State */}
         {appState === 'form' && (
-          <StatementForm onSubmit={handleFormSubmit} loading={false} />
+          <StatementForm
+            onSubmit={handleFormSubmit}
+            loading={false}
+            initialData={formData || undefined}
+          />
         )}
 
         {/* Generating State */}

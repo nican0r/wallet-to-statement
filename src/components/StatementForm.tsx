@@ -1,16 +1,18 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Input, TextArea } from './ui/Input';
 import { Button } from './ui/Button';
 import { SUPPORTED_TOKENS } from '../types/wallet.types';
 import { StatementFormData } from '../types/statement.types';
 import { validateStatementForm } from '../utils/validators';
+import { format } from 'date-fns';
 
 interface StatementFormProps {
   onSubmit: (data: StatementFormData) => void;
   loading?: boolean;
+  initialData?: StatementFormData;
 }
 
-export const StatementForm: React.FC<StatementFormProps> = ({ onSubmit, loading = false }) => {
+export const StatementForm: React.FC<StatementFormProps> = ({ onSubmit, loading = false, initialData }) => {
   const [accountHolderName, setAccountHolderName] = useState('');
   const [accountHolderAddress, setAccountHolderAddress] = useState('');
   const [walletAddress, setWalletAddress] = useState('');
@@ -18,6 +20,18 @@ export const StatementForm: React.FC<StatementFormProps> = ({ onSubmit, loading 
   const [endDate, setEndDate] = useState<string>('');
   const [selectedTokens, setSelectedTokens] = useState<string[]>(['ETH']);
   const [errors, setErrors] = useState<string[]>([]);
+
+  // Initialize form with previous data if available
+  useEffect(() => {
+    if (initialData) {
+      setAccountHolderName(initialData.accountHolder.name);
+      setAccountHolderAddress(initialData.accountHolder.address);
+      setWalletAddress(initialData.walletAddress);
+      setStartDate(format(initialData.statementPeriod.startDate, 'yyyy-MM-dd'));
+      setEndDate(format(initialData.statementPeriod.endDate, 'yyyy-MM-dd'));
+      setSelectedTokens(initialData.selectedTokens.map(t => t.address));
+    }
+  }, [initialData]);
 
   const handleTokenToggle = (tokenAddress: string) => {
     setSelectedTokens((prev) =>

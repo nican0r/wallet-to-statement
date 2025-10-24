@@ -4,8 +4,6 @@ import { StatementData, StatementFormData } from '../types/statement.types';
 import { Transaction, AlchemyAssetTransfer } from '../types/transaction.types';
 import { Token, TokenBalance } from '../types/wallet.types';
 import {
-  estimateBlockFromTimestamp,
-  dateToTimestamp,
   timestampToDate,
   calculateRunningBalances,
   calculateTransactionSummary,
@@ -16,47 +14,56 @@ export class StatementService {
   async generateStatement(formData: StatementFormData): Promise<StatementData> {
     const { accountHolder, walletAddress, statementPeriod, selectedTokens } = formData;
 
-    // Step 1: Calculate block numbers for the date range
-    const startTimestamp = dateToTimestamp(statementPeriod.startDate);
-    const endTimestamp = dateToTimestamp(statementPeriod.endDate);
+    // Step 1: Get current balances (we'll use latest for closing balance)
+    // For simplicity and reliability, we'll fetch a broader range of transactions
+    // and filter by date, rather than trying to estimate exact block numbers
 
-    const startBlock = estimateBlockFromTimestamp(startTimestamp);
-    const endBlock = estimateBlockFromTimestamp(endTimestamp);
+    console.log('Fetching current wallet balances...');
 
-    console.log('Block range:', { startBlock, endBlock });
-
-    // Step 2: Fetch token balances at start and end blocks
-    const [openingBalances, closingBalances] = await Promise.all([
-      alchemyService.getTokenBalances(walletAddress, selectedTokens, startBlock),
-      alchemyService.getTokenBalances(walletAddress, selectedTokens, endBlock),
-    ]);
-
-    console.log('Fetched balances:', { openingBalances, closingBalances });
-
-    // Step 3: Fetch historical prices for opening and closing balances
-    const openingBalancesWithPrices = await this.enrichBalancesWithPrices(
-      openingBalances,
-      statementPeriod.startDate
+    // Step 2: Fetch token balances (use latest for closing balance)
+    const closingBalances = await alchemyService.getTokenBalances(
+      walletAddress,
+      selectedTokens
     );
 
+    console.log('Fetched current balances:', closingBalances);
+
+    // Step 3: Fetch historical prices for opening and closing balances
     const closingBalancesWithPrices = await this.enrichBalancesWithPrices(
       closingBalances,
       statementPeriod.endDate
     );
 
-    // Step 4: Fetch transactions in the date range
+    // Step 4: Fetch ALL transactions (we'll filter by date later)
+    // Using a reasonable block range - last 100,000 blocks (~14 days)
+    const latestBlock = await alchemyService.getLatestBlock();
+    const fromBlock = Math.max(0, latestBlock - 100000); // Go back ~14 days
+
+    console.log(`Fetching transactions from block ${fromBlock} to ${latestBlock}...`);
+
     const rawTransfers = await alchemyService.getAssetTransfers(
       walletAddress,
-      startBlock,
-      endBlock,
+      fromBlock,
+      latestBlock,
       selectedTokens
     );
 
     console.log(`Fetched ${rawTransfers.length} transactions`);
 
-    // Step 5: Process transactions
+    // Step 5: Filter transactions by date range
+    const startTime = statementPeriod.startDate.getTime();
+    const endTime = statementPeriod.endDate.getTime();
+
+    const filteredTransfers = rawTransfers.filter((transfer) => {
+      const txTimestamp = parseInt(transfer.metadata.blockTimestamp, 16) * 1000;
+      return txTimestamp >= startTime && txTimestamp <= endTime;
+    });
+
+    console.log(`Filtered to ${filteredTransfers.length} transactions in date range`);
+
+    // Step 6: Process transactions
     const transactions = await this.processTransactions(
-      rawTransfers,
+      filteredTransfers,
       walletAddress,
       selectedTokens
     );
@@ -64,37 +71,59 @@ export class StatementService {
     // Sort transactions by timestamp
     transactions.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
 
-    // Step 6: Calculate running balances
-    const openingBalanceTotal = openingBalancesWithPrices.reduce(
+    // Step 7: Calculate opening balance by working backwards from closing balance
+    const closingBalanceTotal = closingBalancesWithPrices.reduce(
       (sum, b) => sum + b.usdValue,
       0
     );
+
+    // Calculate net change from transactions
+    const totalDeposits = transactions
+      .filter((tx) => tx.type === 'credit')
+      .reduce((sum, tx) => sum + tx.usdValue, 0);
+
+    const totalWithdrawals = transactions
+      .filter((tx) => tx.type === 'debit')
+      .reduce((sum, tx) => sum + tx.usdValue, 0);
+
+    // Opening balance = Closing balance - deposits + withdrawals
+    const openingBalanceTotal = closingBalanceTotal - totalDeposits + totalWithdrawals;
+
+    // Create estimated opening balances (proportional to closing balances)
+    const openingBalances = closingBalancesWithPrices.map((balance) => {
+      const proportion = closingBalanceTotal > 0 ? balance.usdValue / closingBalanceTotal : 0;
+      const estimatedOpeningValue = openingBalanceTotal * proportion;
+      const estimatedOpeningTokenBalance = balance.pricePerToken > 0
+        ? estimatedOpeningValue / balance.pricePerToken
+        : 0;
+
+      return {
+        ...balance,
+        formattedBalance: estimatedOpeningTokenBalance,
+        usdValue: estimatedOpeningValue,
+      };
+    });
 
     const transactionsWithRunningBalance = calculateRunningBalances(
       transactions,
       openingBalanceTotal
     );
 
-    // Step 7: Calculate summary
-    const closingBalanceTotal = closingBalancesWithPrices.reduce(
-      (sum, b) => sum + b.usdValue,
-      0
-    );
-
+    // Step 8: Calculate summary
     const summary = calculateTransactionSummary(
       transactionsWithRunningBalance,
       openingBalanceTotal,
       closingBalanceTotal
     );
 
-    // Step 8: Build statement data
+    // Step 9: Build statement data
     const statementData: StatementData = {
       accountHolder,
       walletAddress,
       statementPeriod,
       tokens: selectedTokens,
       openingBalance: {
-        tokens: openingBalancesWithPrices,
+        tokens: openingBalances,
         totalUsdValue: openingBalanceTotal,
       },
       closingBalance: {
