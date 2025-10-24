@@ -4,7 +4,7 @@ import { StatementData } from '../types/statement.types';
 import { BankStatementPDF } from './PDFDocument/BankStatementPDF';
 import { Button } from './ui/Button';
 import { formatCurrency, formatDate, formatTokenAmount } from '../utils/formatters';
-import { Download } from 'lucide-react';
+import { Download, ExternalLink } from 'lucide-react';
 
 interface StatementPreviewProps {
   data: StatementData;
@@ -26,6 +26,14 @@ export const StatementPreview: React.FC<StatementPreviewProps> = ({ data, onBack
     URL.revokeObjectURL(url);
   };
 
+  const handlePreviewInNewTab = async () => {
+    const blob = await pdf(<BankStatementPDF data={data} />).toBlob();
+    const url = URL.createObjectURL(blob);
+    window.open(url, '_blank');
+    // Note: URL is not revoked immediately to allow the new tab to load
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       {/* Header */}
@@ -37,13 +45,22 @@ export const StatementPreview: React.FC<StatementPreviewProps> = ({ data, onBack
               Review your statement below and download when ready
             </p>
           </div>
-          <button
-            onClick={handleDownload}
-            className="inline-flex items-center gap-2 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-          >
-            <Download size={20} />
-            Download PDF
-          </button>
+          <div className="flex gap-3">
+            <button
+              onClick={handlePreviewInNewTab}
+              className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              <ExternalLink size={20} />
+              Preview
+            </button>
+            <button
+              onClick={handleDownload}
+              className="inline-flex items-center gap-2 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+            >
+              <Download size={20} />
+              Download PDF
+            </button>
+          </div>
         </div>
       </div>
 
@@ -60,6 +77,10 @@ export const StatementPreview: React.FC<StatementPreviewProps> = ({ data, onBack
           </div>
           <div className="md:col-span-2">
             <span className="font-semibold">Address:</span> {data.accountHolder.address}
+          </div>
+          <div className="md:col-span-2">
+            <span className="font-semibold">Networks:</span>{' '}
+            {data.chains.map(c => c.name).join(', ')}
           </div>
           <div className="md:col-span-2">
             <span className="font-semibold">Period:</span>{' '}
@@ -82,10 +103,11 @@ export const StatementPreview: React.FC<StatementPreviewProps> = ({ data, onBack
               </span>
             </div>
             <div className="space-y-1 text-sm text-gray-300">
-              {data.openingBalance.tokens.map((token) => (
-                <div key={token.token.symbol} className="flex justify-between">
+              {data.openingBalance.tokens.map((token, idx) => (
+                <div key={`open-${token.token.symbol}-${idx}`} className="flex justify-between">
                   <span>
                     {formatTokenAmount(token.formattedBalance)} {token.token.symbol}
+                    {token.chain && ` (${token.chain.name})`}
                   </span>
                   <span>{formatCurrency(token.usdValue)}</span>
                 </div>
@@ -101,10 +123,11 @@ export const StatementPreview: React.FC<StatementPreviewProps> = ({ data, onBack
               </span>
             </div>
             <div className="space-y-1 text-sm text-gray-300">
-              {data.closingBalance.tokens.map((token) => (
-                <div key={token.token.symbol} className="flex justify-between">
+              {data.closingBalance.tokens.map((token, idx) => (
+                <div key={`close-${token.token.symbol}-${idx}`} className="flex justify-between">
                   <span>
                     {formatTokenAmount(token.formattedBalance)} {token.token.symbol}
+                    {token.chain && ` (${token.chain.name})`}
                   </span>
                   <span>{formatCurrency(token.usdValue)}</span>
                 </div>
@@ -138,9 +161,8 @@ export const StatementPreview: React.FC<StatementPreviewProps> = ({ data, onBack
           </div>
           <div className="text-center">
             <div
-              className={`text-2xl font-bold ${
-                data.summary.netChange >= 0 ? 'text-green-400' : 'text-red-400'
-              }`}
+              className={`text-2xl font-bold ${data.summary.netChange >= 0 ? 'text-green-400' : 'text-red-400'
+                }`}
             >
               {formatCurrency(data.summary.netChange)}
             </div>
@@ -173,7 +195,7 @@ export const StatementPreview: React.FC<StatementPreviewProps> = ({ data, onBack
                   </td>
                   <td className="px-4 py-3 text-gray-300">
                     {tx.type === 'credit' ? 'Received' : 'Sent'}{' '}
-                    {formatTokenAmount(tx.formattedValue, 4)} {tx.token.symbol}
+                    {formatTokenAmount(tx.formattedValue, 4)} {tx.token.symbol} ({tx.chain.name})
                   </td>
                   <td className="px-4 py-3 text-right text-red-400">
                     {tx.type === 'debit' ? formatCurrency(tx.usdValue) : '-'}
@@ -195,6 +217,10 @@ export const StatementPreview: React.FC<StatementPreviewProps> = ({ data, onBack
       <div className="flex gap-4">
         <Button variant="secondary" onClick={onBack} className="flex-1">
           Generate Another Statement
+        </Button>
+        <Button variant="secondary" onClick={handlePreviewInNewTab} className="flex-1">
+          <ExternalLink className="inline mr-2" size={20} />
+          Preview
         </Button>
         <Button variant="primary" onClick={handleDownload} className="flex-1">
           <Download className="inline mr-2" size={20} />
