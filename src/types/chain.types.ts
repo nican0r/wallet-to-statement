@@ -4,6 +4,7 @@ export interface Chain {
   symbol: string;
   alchemyNetwork: string;
   explorerUrl: string;
+  chainId: number; // Etherscan API v2 chain ID
   isDefault: boolean;
   color: string;
 }
@@ -15,6 +16,7 @@ export const SUPPORTED_CHAINS: Chain[] = [
     symbol: 'ETH',
     alchemyNetwork: 'eth-mainnet',
     explorerUrl: 'https://etherscan.io',
+    chainId: 1,
     isDefault: true,
     color: '#627EEA',
   },
@@ -24,6 +26,7 @@ export const SUPPORTED_CHAINS: Chain[] = [
     symbol: 'MATIC',
     alchemyNetwork: 'polygon-mainnet',
     explorerUrl: 'https://polygonscan.com',
+    chainId: 137,
     isDefault: true,
     color: '#8247E5',
   },
@@ -33,6 +36,7 @@ export const SUPPORTED_CHAINS: Chain[] = [
     symbol: 'ARB',
     alchemyNetwork: 'arb-mainnet',
     explorerUrl: 'https://arbiscan.io',
+    chainId: 42161,
     isDefault: true,
     color: '#28A0F0',
   },
@@ -42,6 +46,7 @@ export const SUPPORTED_CHAINS: Chain[] = [
     symbol: 'OP',
     alchemyNetwork: 'opt-mainnet',
     explorerUrl: 'https://optimistic.etherscan.io',
+    chainId: 10,
     isDefault: true,
     color: '#FF0420',
   },
@@ -51,6 +56,7 @@ export const SUPPORTED_CHAINS: Chain[] = [
     symbol: 'BASE',
     alchemyNetwork: 'base-mainnet',
     explorerUrl: 'https://basescan.org',
+    chainId: 8453,
     isDefault: true,
     color: '#0052FF',
   },
@@ -60,6 +66,7 @@ export const SUPPORTED_CHAINS: Chain[] = [
     symbol: 'BNB',
     alchemyNetwork: 'bnb-mainnet',
     explorerUrl: 'https://bscscan.com',
+    chainId: 56,
     isDefault: false,
     color: '#F3BA2F',
   },
@@ -69,6 +76,7 @@ export const SUPPORTED_CHAINS: Chain[] = [
     symbol: 'AVAX',
     alchemyNetwork: 'avax-mainnet',
     explorerUrl: 'https://snowtrace.io',
+    chainId: 43114,
     isDefault: false,
     color: '#E84142',
   },
@@ -86,4 +94,11 @@ export function getAlchemyUrl(chainId: string, apiKey: string): string {
     throw new Error(`Unsupported chain: ${chainId}`);
   }
   return `https://${chain.alchemyNetwork}.g.alchemy.com/v2/${apiKey}`;
+}
+
+// Etherscan API v2 constants
+export const ETHERSCAN_API_V2_BASE_URL = 'https://api.etherscan.io/v2/api';
+
+export function getEtherscanApiKey(): string {
+  return import.meta.env.VITE_ETHERSCAN_API_KEY || '';
 }

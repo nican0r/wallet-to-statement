@@ -1,5 +1,6 @@
 import { alchemyService } from './alchemy.service';
 import { pricingService } from './pricing.service';
+import { blocktimeService } from './blocktime.service';
 import { StatementData, StatementFormData } from '../types/statement.types';
 import { Transaction, AlchemyAssetTransfer } from '../types/transaction.types';
 import { Token, TokenBalance, getTokensForChain } from '../types/wallet.types';
@@ -52,36 +53,42 @@ export class StatementService {
         allClosingBalances.push(...balancesWithChain);
         console.log(`Fetched ${chainClosingBalances.length} token balances on ${chain.name}`);
 
-        // Step 3: Fetch transactions for this chain
-        const latestBlock = await alchemyService.getLatestBlock(chain);
-        const fromBlock = Math.max(0, latestBlock - 100000); // Go back ~14 days
+        // Step 3: Get precise block range for the statement period using Etherscan API
+        const year = statementPeriod.startDate.getFullYear();
+        const month = statementPeriod.startDate.getMonth() + 1;
 
-        console.log(`Fetching transactions on ${chain.name} from block ${fromBlock} to ${latestBlock}...`);
+        const { fromBlock, toBlock } = await blocktimeService.getBlockRangeForMonth(
+          year,
+          month,
+          chain
+        );
+
+        // Fallback to approximation if Etherscan API failed (returned 0)
+        let actualFromBlock = fromBlock;
+        let actualToBlock = toBlock;
+
+        if (fromBlock === 0 || toBlock === 0) {
+          console.warn(`Using fallback block range for ${chain.name}`);
+          const latestBlock = await alchemyService.getLatestBlock(chain);
+          actualFromBlock = Math.max(0, latestBlock - 100000); // Go back ~14 days
+          actualToBlock = latestBlock;
+        }
+
+        console.log(`Fetching transactions on ${chain.name} from block ${actualFromBlock} to ${actualToBlock}...`);
 
         const rawTransfers = await alchemyService.getAssetTransfers(
           walletAddress,
-          fromBlock,
-          latestBlock,
+          actualFromBlock,
+          actualToBlock,
           tokensForThisChain,
           chain
         );
 
         console.log(`Fetched ${rawTransfers.length} transactions on ${chain.name}`);
 
-        // Step 3: Filter transactions by date range
-        const startTime = statementPeriod.startDate.getTime();
-        const endTime = statementPeriod.endDate.getTime();
-
-        const filteredTransfers = rawTransfers.filter((transfer) => {
-          const txTimestamp = parseInt(transfer.metadata.blockTimestamp, 16) * 1000;
-          return txTimestamp >= startTime && txTimestamp <= endTime;
-        });
-
-        console.log(`Filtered to ${filteredTransfers.length} transactions in date range on ${chain.name}`);
-
         // Step 4: Process transactions for this chain
         const chainTransactions = await this.processTransactions(
-          filteredTransfers,
+          rawTransfers,
           walletAddress,
           tokensForThisChain,
           chain
@@ -244,10 +251,32 @@ export class StatementService {
           transfer.to?.toLowerCase() === walletAddress.toLowerCase();
         const type = isIncoming ? 'credit' : 'debit';
 
-        // Get timestamp
-        const timestamp = timestampToDate(
-          parseInt(transfer.metadata.blockTimestamp, 16)
-        );
+        // Get timestamp - handle multiple formats (hex, decimal, or ISO string)
+        let timestamp: Date;
+        if (!transfer.metadata?.blockTimestamp) {
+          timestamp = new Date();
+        } else {
+          const blockTimestamp = transfer.metadata.blockTimestamp;
+
+          // Check the format of the timestamp
+          if (blockTimestamp.includes('T') || blockTimestamp.includes('-')) {
+            // ISO 8601 date string format (e.g., "2025-06-08T15:24:23.000Z")
+            timestamp = new Date(blockTimestamp);
+          } else if (blockTimestamp.startsWith('0x')) {
+            // Hexadecimal Unix timestamp
+            const timestampValue = parseInt(blockTimestamp, 16);
+            timestamp = timestampToDate(timestampValue);
+          } else {
+            // Decimal Unix timestamp
+            const timestampValue = parseInt(blockTimestamp, 10);
+            timestamp = timestampToDate(timestampValue);
+          }
+
+          // Validate the timestamp is reasonable
+          if (timestamp.getFullYear() < 2015 || isNaN(timestamp.getTime())) {
+            timestamp = new Date(); // Fallback to current date
+          }
+        }
 
         // Get price at transaction time
         const price = await pricingService.getHistoricalPrice(token.coingeckoId, timestamp);
