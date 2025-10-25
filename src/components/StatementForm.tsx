@@ -19,8 +19,8 @@ export const StatementForm: React.FC<StatementFormProps> = ({ onSubmit, loading 
   const [accountHolderAddress, setAccountHolderAddress] = useState('');
   const [accountName, setAccountName] = useState('');
   const [walletAddress, setWalletAddress] = useState('');
-  const [startDate, setStartDate] = useState<string>('');
-  const [endDate, setEndDate] = useState<string>('');
+  const [selectedMonth, setSelectedMonth] = useState<string>('');
+  const [selectedYear, setSelectedYear] = useState<string>('');
   const [selectedTokens, setSelectedTokens] = useState<string[]>(['ETH']);
   const [selectedChains, setSelectedChains] = useState<Chain[]>(DEFAULT_CHAINS);
   const [errors, setErrors] = useState<string[]>([]);
@@ -32,8 +32,9 @@ export const StatementForm: React.FC<StatementFormProps> = ({ onSubmit, loading 
       setAccountHolderAddress(initialData.accountHolder.address);
       setAccountName(initialData.accountHolder.accountName || '');
       setWalletAddress(initialData.walletAddress);
-      setStartDate(format(initialData.statementPeriod.startDate, 'yyyy-MM-dd'));
-      setEndDate(format(initialData.statementPeriod.endDate, 'yyyy-MM-dd'));
+      const startDate = initialData.statementPeriod.startDate;
+      setSelectedMonth(String(startDate.getMonth() + 1).padStart(2, '0'));
+      setSelectedYear(String(startDate.getFullYear()));
       setSelectedTokens(initialData.selectedTokens.map(t => t.address));
       setSelectedChains(initialData.selectedChains);
     }
@@ -50,12 +51,23 @@ export const StatementForm: React.FC<StatementFormProps> = ({ onSubmit, loading 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
+    // Calculate start and end dates from selected month and year
+    let startDate: Date | null = null;
+    let endDate: Date | null = null;
+
+    if (selectedMonth && selectedYear) {
+      const year = Number(selectedYear);
+      const month = Number(selectedMonth);
+      startDate = new Date(year, month - 1, 1); // First day of the month
+      endDate = new Date(year, month, 0); // Last day of the month
+    }
+
     const formData = {
       accountHolderName,
       accountHolderAddress,
       walletAddress,
-      startDate: startDate ? new Date(startDate) : null,
-      endDate: endDate ? new Date(endDate) : null,
+      startDate,
+      endDate,
       selectedTokens: SUPPORTED_TOKENS.filter((t) => selectedTokens.includes(t.address)),
     };
 
@@ -76,8 +88,8 @@ export const StatementForm: React.FC<StatementFormProps> = ({ onSubmit, loading 
       },
       walletAddress,
       statementPeriod: {
-        startDate: new Date(startDate),
-        endDate: new Date(endDate),
+        startDate: startDate!,
+        endDate: endDate!,
       },
       selectedTokens: SUPPORTED_TOKENS.filter((t) => selectedTokens.includes(t.address)),
       selectedChains,
@@ -134,22 +146,53 @@ export const StatementForm: React.FC<StatementFormProps> = ({ onSubmit, loading 
         <h2 className="text-2xl font-bold text-white mb-6">Statement Period</h2>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Input
-            label="Start Date"
-            type="date"
-            value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
-            disabled={loading}
-          />
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              Month
+            </label>
+            <select
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(e.target.value)}
+              disabled={loading}
+              className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <option value="">Select month</option>
+              <option value="01">January</option>
+              <option value="02">February</option>
+              <option value="03">March</option>
+              <option value="04">April</option>
+              <option value="05">May</option>
+              <option value="06">June</option>
+              <option value="07">July</option>
+              <option value="08">August</option>
+              <option value="09">September</option>
+              <option value="10">October</option>
+              <option value="11">November</option>
+              <option value="12">December</option>
+            </select>
+          </div>
 
-          <Input
-            label="End Date"
-            type="date"
-            value={endDate}
-            onChange={(e) => setEndDate(e.target.value)}
-            disabled={loading}
-          />
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              Year
+            </label>
+            <select
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(e.target.value)}
+              disabled={loading}
+              className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <option value="">Select year</option>
+              {Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - i).map(year => (
+                <option key={year} value={year}>{year}</option>
+              ))}
+            </select>
+          </div>
         </div>
+
+        <p className="text-sm text-gray-400 mt-4">
+          Statement will be generated for the entire month
+        </p>
       </div>
 
       <div className="bg-gray-800 p-6 rounded-lg shadow-lg">

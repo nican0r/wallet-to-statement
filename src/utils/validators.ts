@@ -3,10 +3,6 @@ export function isValidEthereumAddress(address: string): boolean {
   return /^0x[a-fA-F0-9]{40}$/.test(address);
 }
 
-export function isValidDateRange(startDate: Date, endDate: Date): boolean {
-  return startDate < endDate;
-}
-
 export function validateStatementForm(data: {
   accountHolderName: string;
   accountHolderAddress: string;
@@ -31,16 +27,8 @@ export function validateStatementForm(data: {
     errors.push('Invalid Ethereum wallet address format');
   }
 
-  if (!data.startDate) {
-    errors.push('Start date is required');
-  }
-
-  if (!data.endDate) {
-    errors.push('End date is required');
-  }
-
-  if (data.startDate && data.endDate && !isValidDateRange(data.startDate, data.endDate)) {
-    errors.push('End date must be after start date');
+  if (!data.startDate || !data.endDate) {
+    errors.push('Please select both month and year');
   }
 
   if (!data.selectedTokens || data.selectedTokens.length === 0) {
