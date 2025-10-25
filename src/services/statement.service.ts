@@ -104,62 +104,59 @@ export class StatementService {
     console.log(`\nTotal balances across all chains: ${allClosingBalances.length}`);
     console.log(`Total transactions across all chains: ${allTransactions.length}`);
 
-    // Step 5: Enrich balances with prices
-    console.log('\nEnriching balances with historical prices...');
+    // Step 5: Enrich closing balances with end-of-month prices
+    console.log('\nEnriching closing balances with end-of-month prices...');
     const closingBalancesWithPrices = await this.enrichBalancesWithPrices(
       allClosingBalances,
       statementPeriod.endDate
     );
 
-    // Sort transactions by timestamp
-    allTransactions.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+    // Step 6: Fetch opening balances with start-of-month prices
+    console.log('Fetching opening balances with start-of-month prices...');
+    const openingBalances = await this.getOpeningBalances(
+      allClosingBalances,
+      allTransactions,
+      statementPeriod.startDate
+    );
 
-    // Step 6: Calculate opening balance by working backwards from closing balance
+    // Step 7: Calculate unrealized gains/losses
+    console.log('Calculating unrealized gains/losses...');
+    const unrealizedGainLossTransactions = this.calculateUnrealizedGainLoss(
+      openingBalances,
+      closingBalancesWithPrices,
+      statementPeriod.endDate
+    );
+
+    // Add unrealized gains/losses to transaction list
+    const allTransactionsWithUnrealized = [...allTransactions, ...unrealizedGainLossTransactions];
+
+    // Sort transactions by timestamp
+    allTransactionsWithUnrealized.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+
+    // Step 8: Calculate totals
     const closingBalanceTotal = closingBalancesWithPrices.reduce(
       (sum, b) => sum + b.usdValue,
       0
     );
 
-    // Calculate net change from transactions
-    const totalDeposits = allTransactions
-      .filter((tx) => tx.type === 'credit')
-      .reduce((sum, tx) => sum + tx.usdValue, 0);
-
-    const totalWithdrawals = allTransactions
-      .filter((tx) => tx.type === 'debit')
-      .reduce((sum, tx) => sum + tx.usdValue, 0);
-
-    // Opening balance = Closing balance - deposits + withdrawals
-    const openingBalanceTotal = closingBalanceTotal - totalDeposits + totalWithdrawals;
-
-    // Create estimated opening balances (proportional to closing balances)
-    const openingBalances = closingBalancesWithPrices.map((balance) => {
-      const proportion = closingBalanceTotal > 0 ? balance.usdValue / closingBalanceTotal : 0;
-      const estimatedOpeningValue = openingBalanceTotal * proportion;
-      const estimatedOpeningTokenBalance = balance.pricePerToken > 0
-        ? estimatedOpeningValue / balance.pricePerToken
-        : 0;
-
-      return {
-        ...balance,
-        formattedBalance: estimatedOpeningTokenBalance,
-        usdValue: estimatedOpeningValue,
-      };
-    });
+    const openingBalanceTotal = openingBalances.reduce(
+      (sum, b) => sum + b.usdValue,
+      0
+    );
 
     const transactionsWithRunningBalance = calculateRunningBalances(
-      allTransactions,
+      allTransactionsWithUnrealized,
       openingBalanceTotal
     );
 
-    // Step 7: Calculate summary
+    // Step 9: Calculate summary
     const summary = calculateTransactionSummary(
       transactionsWithRunningBalance,
       openingBalanceTotal,
       closingBalanceTotal
     );
 
-    // Step 8: Build statement data
+    // Step 10: Build statement data
     const statementData: StatementData = {
       accountHolder,
       walletAddress,
@@ -200,6 +197,101 @@ export class StatementService {
     }
 
     return enrichedBalances;
+  }
+
+  private async getOpeningBalances(
+    closingBalances: TokenBalance[],
+    transactions: Transaction[],
+    startDate: Date
+  ): Promise<TokenBalance[]> {
+    const openingBalances: TokenBalance[] = [];
+
+    for (const closingBalance of closingBalances) {
+      // Calculate the token quantity at the start of the period
+      // by subtracting credits and adding back debits from the closing balance
+      const tokenTransactions = transactions.filter(
+        (tx) =>
+          tx.token.symbol === closingBalance.token.symbol &&
+          tx.chain?.id === closingBalance.chain?.id
+      );
+
+      let openingTokenQuantity = closingBalance.formattedBalance;
+
+      for (const tx of tokenTransactions) {
+        if (tx.type === 'credit') {
+          // Subtract incoming transfers to get opening balance
+          openingTokenQuantity -= tx.formattedValue;
+        } else if (tx.type === 'debit') {
+          // Add back outgoing transfers to get opening balance
+          openingTokenQuantity += tx.formattedValue;
+        }
+      }
+
+      // Get the price at the start of the period
+      const startPrice = await pricingService.getHistoricalPrice(
+        closingBalance.token.coingeckoId,
+        startDate
+      );
+
+      const openingUsdValue = openingTokenQuantity * startPrice;
+
+      openingBalances.push({
+        ...closingBalance,
+        formattedBalance: openingTokenQuantity,
+        usdValue: openingUsdValue,
+        pricePerToken: startPrice,
+      });
+    }
+
+    return openingBalances;
+  }
+
+  private calculateUnrealizedGainLoss(
+    openingBalances: TokenBalance[],
+    closingBalances: TokenBalance[],
+    endDate: Date
+  ): Transaction[] {
+    const unrealizedTransactions: Transaction[] = [];
+
+    for (const openingBalance of openingBalances) {
+      const closingBalance = closingBalances.find(
+        (cb) =>
+          cb.token.symbol === openingBalance.token.symbol &&
+          cb.chain?.id === openingBalance.chain?.id
+      );
+
+      if (!closingBalance) continue;
+
+      // For the same token quantity, calculate the USD value change
+      const tokenQuantity = openingBalance.formattedBalance;
+      const openingUsdValue = tokenQuantity * openingBalance.pricePerToken;
+      const closingUsdValue = tokenQuantity * closingBalance.pricePerToken;
+      const unrealizedGainLoss = closingUsdValue - openingUsdValue;
+
+      // Only create a transaction if there's a meaningful change (> $0.01)
+      if (Math.abs(unrealizedGainLoss) < 0.01) continue;
+
+      const isGain = unrealizedGainLoss > 0;
+
+      unrealizedTransactions.push({
+        hash: `unrealized-${openingBalance.token.symbol}-${openingBalance.chain?.id || 'unknown'}`,
+        blockNum: 'N/A',
+        timestamp: endDate,
+        from: isGain ? 'Market Appreciation' : 'Market Depreciation',
+        to: isGain ? 'Market Appreciation' : 'Market Depreciation',
+        value: '0',
+        formattedValue: 0,
+        token: openingBalance.token,
+        chain: openingBalance.chain!,
+        type: isGain ? 'unrealized_gain' : 'unrealized_loss',
+        usdValue: Math.abs(unrealizedGainLoss),
+        pricePerToken: closingBalance.pricePerToken,
+        runningBalance: 0,
+        isUnrealized: true,
+      });
+    }
+
+    return unrealizedTransactions;
   }
 
   private async processTransactions(

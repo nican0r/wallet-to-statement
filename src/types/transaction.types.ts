@@ -1,7 +1,7 @@
 import { Token } from './wallet.types';
 import { Chain } from './chain.types';
 
-export type TransactionType = 'credit' | 'debit';
+export type TransactionType = 'credit' | 'debit' | 'unrealized_gain' | 'unrealized_loss';
 
 export interface Transaction {
   hash: string;
@@ -13,10 +13,11 @@ export interface Transaction {
   formattedValue: number; // Formatted value
   token: Token;
   chain: Chain;
-  type: TransactionType; // credit (incoming) or debit (outgoing)
+  type: TransactionType; // credit (incoming), debit (outgoing), unrealized_gain, or unrealized_loss
   usdValue: number;
   pricePerToken: number;
   runningBalance: number; // Running balance after this transaction in USD
+  isUnrealized?: boolean; // Flag to indicate if this is an unrealized gain/loss
 }
 
 export interface AlchemyAssetTransfer {

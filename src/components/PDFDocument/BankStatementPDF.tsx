@@ -120,6 +120,23 @@ interface BankStatementPDFProps {
 }
 
 export const BankStatementPDF: React.FC<BankStatementPDFProps> = ({ data }) => {
+  // Calculate net unrealized gain/loss
+  const unrealizedGains = data.transactions
+    .filter(tx => tx.type === 'unrealized_gain')
+    .reduce((sum, tx) => sum + tx.usdValue, 0);
+
+  const unrealizedLosses = data.transactions
+    .filter(tx => tx.type === 'unrealized_loss')
+    .reduce((sum, tx) => sum + tx.usdValue, 0);
+
+  const netUnrealizedGainLoss = unrealizedGains - unrealizedLosses;
+  const hasUnrealizedGain = netUnrealizedGainLoss > 0;
+  const hasUnrealizedLoss = netUnrealizedGainLoss < 0;
+
+  // Filter only real transactions (exclude unrealized)
+  const realCredits = data.transactions.filter(tx => tx.type === 'credit');
+  const realDebits = data.transactions.filter(tx => tx.type === 'debit');
+
   return (
     <Document>
       <Page size="A4" style={styles.page}>
@@ -201,24 +218,33 @@ export const BankStatementPDF: React.FC<BankStatementPDFProps> = ({ data }) => {
               <Text style={{ width: '60%', color: '#000' }}>Description</Text>
               <Text style={{ width: '20%', textAlign: 'right', color: '#000' }}>Amount</Text>
             </View>
-            {data.transactions.filter(tx => tx.type === 'credit').length > 0 ? (
-              data.transactions
-                .filter(tx => tx.type === 'credit')
-                .map((tx) => (
-                  <View key={tx.hash} style={styles.tableRow}>
-                    <Text style={{ width: '20%' }}>{formatDate(tx.timestamp)}</Text>
-                    <Text style={{ width: '60%' }}>
-                      Received {formatTokenAmount(tx.formattedValue, 4)} {tx.token.symbol} from {tx.from}
-                    </Text>
-                    <Text style={{ width: '20%', textAlign: 'right' }}>
-                      {formatCurrency(tx.usdValue)}
-                    </Text>
-                  </View>
-                ))
+            {realCredits.length > 0 ? (
+              realCredits.map((tx) => (
+                <View key={tx.hash} style={styles.tableRow}>
+                  <Text style={{ width: '20%' }}>{formatDate(tx.timestamp)}</Text>
+                  <Text style={{ width: '60%' }}>
+                    Received {formatTokenAmount(tx.formattedValue, 4)} {tx.token.symbol} from {tx.from}
+                  </Text>
+                  <Text style={{ width: '20%', textAlign: 'right' }}>
+                    {formatCurrency(tx.usdValue)}
+                  </Text>
+                </View>
+              ))
             ) : (
               <View style={styles.tableRow}>
                 <Text style={{ width: '100%', textAlign: 'center', fontStyle: 'italic', color: '#999' }}>
                   No deposits during this period
+                </Text>
+              </View>
+            )}
+            {hasUnrealizedGain && (
+              <View style={styles.tableRow}>
+                <Text style={{ width: '20%' }}>{formatDate(data.statementPeriod.endDate)}</Text>
+                <Text style={{ width: '60%' }}>
+                  Gain in portfolio value
+                </Text>
+                <Text style={{ width: '20%', textAlign: 'right' }}>
+                  {formatCurrency(netUnrealizedGainLoss)}
                 </Text>
               </View>
             )}
@@ -242,24 +268,33 @@ export const BankStatementPDF: React.FC<BankStatementPDFProps> = ({ data }) => {
               <Text style={{ width: '60%', color: '#000' }}>Description</Text>
               <Text style={{ width: '20%', textAlign: 'right', color: '#000' }}>Amount</Text>
             </View>
-            {data.transactions.filter(tx => tx.type === 'debit').length > 0 ? (
-              data.transactions
-                .filter(tx => tx.type === 'debit')
-                .map((tx) => (
-                  <View key={tx.hash} style={styles.tableRow}>
-                    <Text style={{ width: '20%' }}>{formatDate(tx.timestamp)}</Text>
-                    <Text style={{ width: '60%' }}>
-                      Sent {formatTokenAmount(tx.formattedValue, 4)} {tx.token.symbol} to {tx.to}
-                    </Text>
-                    <Text style={{ width: '20%', textAlign: 'right' }}>
-                      {formatCurrency(tx.usdValue)}
-                    </Text>
-                  </View>
-                ))
+            {realDebits.length > 0 ? (
+              realDebits.map((tx) => (
+                <View key={tx.hash} style={styles.tableRow}>
+                  <Text style={{ width: '20%' }}>{formatDate(tx.timestamp)}</Text>
+                  <Text style={{ width: '60%' }}>
+                    Sent {formatTokenAmount(tx.formattedValue, 4)} {tx.token.symbol} to {tx.to}
+                  </Text>
+                  <Text style={{ width: '20%', textAlign: 'right' }}>
+                    {formatCurrency(tx.usdValue)}
+                  </Text>
+                </View>
+              ))
             ) : (
               <View style={styles.tableRow}>
                 <Text style={{ width: '100%', textAlign: 'center', fontStyle: 'italic', color: '#999' }}>
                   No withdrawals during this period
+                </Text>
+              </View>
+            )}
+            {hasUnrealizedLoss && (
+              <View style={styles.tableRow}>
+                <Text style={{ width: '20%' }}>{formatDate(data.statementPeriod.endDate)}</Text>
+                <Text style={{ width: '60%' }}>
+                  Loss in portfolio value
+                </Text>
+                <Text style={{ width: '20%', textAlign: 'right' }}>
+                  {formatCurrency(Math.abs(netUnrealizedGainLoss))}
                 </Text>
               </View>
             )}

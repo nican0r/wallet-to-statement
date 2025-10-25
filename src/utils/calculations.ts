@@ -7,9 +7,9 @@ export function calculateRunningBalances(
   let runningBalance = openingBalanceUsd;
 
   return transactions.map((tx) => {
-    if (tx.type === 'credit') {
+    if (tx.type === 'credit' || tx.type === 'unrealized_gain') {
       runningBalance += tx.usdValue;
-    } else {
+    } else if (tx.type === 'debit' || tx.type === 'unrealized_loss') {
       runningBalance -= tx.usdValue;
     }
 
@@ -25,20 +25,25 @@ export function calculateTransactionSummary(
   openingBalanceUsd: number,
   closingBalanceUsd: number
 ): TransactionSummary {
+  // Deposits include actual credits AND unrealized gains
   const totalDeposits = transactions
-    .filter((tx) => tx.type === 'credit')
+    .filter((tx) => tx.type === 'credit' || tx.type === 'unrealized_gain')
     .reduce((sum, tx) => sum + tx.usdValue, 0);
 
+  // Withdrawals include actual debits AND unrealized losses
   const totalWithdrawals = transactions
-    .filter((tx) => tx.type === 'debit')
+    .filter((tx) => tx.type === 'debit' || tx.type === 'unrealized_loss')
     .reduce((sum, tx) => sum + tx.usdValue, 0);
 
   const netChange = closingBalanceUsd - openingBalanceUsd;
 
+  // Count only real transactions (exclude unrealized)
+  const realTransactionCount = transactions.filter((tx) => !tx.isUnrealized).length;
+
   return {
     totalDeposits,
     totalWithdrawals,
-    transactionCount: transactions.length,
+    transactionCount: realTransactionCount,
     netChange,
   };
 }
