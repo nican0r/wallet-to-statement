@@ -5,6 +5,7 @@ import { Chain } from './chain.types';
 export interface AccountHolder {
   name: string;
   address: string;
+  accountName?: string;
 }
 
 export interface StatementPeriod {

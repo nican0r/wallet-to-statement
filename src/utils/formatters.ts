@@ -22,11 +22,11 @@ export function formatWalletAddress(address: string, chars: number = 4): string 
 }
 
 export function formatDate(date: Date): string {
-  return format(date, 'MMM dd, yyyy');
+  return format(date, 'MMMM dd, yyyy');
 }
 
 export function formatDateTime(date: Date): string {
-  return format(date, 'MMM dd, yyyy HH:mm:ss');
+  return format(date, 'MMMM dd, yyyy HH:mm:ss');
 }
 
 export function parseTokenBalance(rawBalance: string, decimals: number): number {

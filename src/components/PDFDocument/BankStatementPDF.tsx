@@ -125,10 +125,7 @@ export const BankStatementPDF: React.FC<BankStatementPDFProps> = ({ data }) => {
       <Page size="A4" style={styles.page}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.title}>CRYPTO WALLET STATEMENT</Text>
-          <Text style={styles.subtitle}>
-            Generated on {formatDate(data.generatedAt)}
-          </Text>
+          <Text style={styles.title}>WALLET STATEMENT</Text>
         </View>
 
         {/* Account Information */}
@@ -143,16 +140,6 @@ export const BankStatementPDF: React.FC<BankStatementPDFProps> = ({ data }) => {
             <Text style={styles.value}>{data.accountHolder.address}</Text>
           </View>
           <View style={styles.row}>
-            <Text style={styles.label}>Wallet Address:</Text>
-            <Text style={styles.value}>{data.walletAddress}</Text>
-          </View>
-          <View style={styles.row}>
-            <Text style={styles.label}>Networks:</Text>
-            <Text style={styles.value}>
-              {data.chains.map(c => c.name).join(', ')}
-            </Text>
-          </View>
-          <View style={styles.row}>
             <Text style={styles.label}>Statement Period:</Text>
             <Text style={styles.value}>
               {formatDate(data.statementPeriod.startDate)} to{' '}
@@ -161,110 +148,129 @@ export const BankStatementPDF: React.FC<BankStatementPDFProps> = ({ data }) => {
           </View>
         </View>
 
-        {/* Balance Summary */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Balance Summary</Text>
-
-          <View style={styles.balanceBox}>
-            <Text style={styles.balanceLabel}>Opening Balance:</Text>
-            <Text style={styles.balanceValue}>
-              {formatCurrency(data.openingBalance.totalUsdValue)}
-            </Text>
-          </View>
-
-          {data.openingBalance.tokens.map((token, idx) => (
-            <View key={`open-${token.token.symbol}-${idx}`} style={styles.tokenBalance}>
-              <Text>
-                {formatTokenAmount(token.formattedBalance)} {token.token.symbol}
-                {token.chain && ` (${token.chain.name})`}
-              </Text>
-              <Text>{formatCurrency(token.usdValue)}</Text>
+          <View style={styles.table}>
+            <View style={styles.tableHeader}>
+              <Text style={{ width: '30%' }}>Your Accounts</Text>
+              <Text style={{ width: '45%' }}>Account</Text>
+              <Text style={{ width: '25%', textAlign: 'right' }}>Ending Balance</Text>
             </View>
-          ))}
+            <View style={styles.tableRow}>
+              <Text style={{ width: '30%', fontWeight: 'bold' }}>
+                {data.accountHolder.accountName || 'Crypto Wallet'}
+              </Text>
+              <Text style={{ width: '45%' }}>{data.walletAddress}</Text>
+              <Text style={{ width: '25%', textAlign: 'right', fontWeight: 'bold' }}>
+                {formatCurrency(data.closingBalance.totalUsdValue)}
+              </Text>
+            </View>
+          </View>
+        </View>
 
-          <View style={[styles.balanceBox, { marginTop: 10 }]}>
-            <Text style={styles.balanceLabel}>Closing Balance:</Text>
+        {/* Account Summary */}
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: '#d32f2f' }]}>Account Summary</Text>
+          <View style={styles.summaryRow}>
+            <Text>Beginning balance on {formatDate(data.statementPeriod.startDate)}</Text>
+            <Text>{formatCurrency(data.openingBalance.totalUsdValue)}</Text>
+          </View>
+          <View style={styles.summaryRow}>
+            <Text>Deposits and other additions</Text>
+            <Text>{formatCurrency(data.summary.totalDeposits)}</Text>
+          </View>
+          <View style={styles.summaryRow}>
+            <Text>Withdrawals and other subtractions</Text>
+            <Text>-{formatCurrency(data.summary.totalWithdrawals)}</Text>
+          </View>
+          <View style={[styles.summaryRow, { borderTop: 2, borderTopColor: '#000', marginTop: 5, paddingTop: 8 }]}>
+            <Text style={styles.summaryLabel}>
+              Ending balance on {formatDate(data.statementPeriod.endDate)}
+            </Text>
             <Text style={styles.balanceValue}>
               {formatCurrency(data.closingBalance.totalUsdValue)}
             </Text>
           </View>
-
-          {data.closingBalance.tokens.map((token, idx) => (
-            <View key={`close-${token.token.symbol}-${idx}`} style={styles.tokenBalance}>
-              <Text>
-                {formatTokenAmount(token.formattedBalance)} {token.token.symbol}
-                {token.chain && ` (${token.chain.name})`}
-              </Text>
-              <Text>{formatCurrency(token.usdValue)}</Text>
-            </View>
-          ))}
         </View>
 
-        {/* Transaction Details */}
+        {/* Deposits and Other Additions */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Transaction Details</Text>
-
+          <Text style={[styles.sectionTitle, { color: '#d32f2f' }]}>Deposits and other additions</Text>
           <View style={styles.table}>
-            <View style={styles.tableHeader}>
-              <Text style={styles.col1}>Date</Text>
-              <Text style={styles.col2}>Description</Text>
-              <Text style={styles.col3}>Debit</Text>
-              <Text style={styles.col4}>Credit</Text>
-              <Text style={styles.col5}>Balance</Text>
+            <View style={[styles.tableHeader, { backgroundColor: 'transparent', color: '#000', borderBottom: 2, borderBottomColor: '#000' }]}>
+              <Text style={{ width: '20%', color: '#000' }}>Date</Text>
+              <Text style={{ width: '60%', color: '#000' }}>Description</Text>
+              <Text style={{ width: '20%', textAlign: 'right', color: '#000' }}>Amount</Text>
             </View>
-
-            {data.transactions.map((tx, index) => (
-              <View
-                key={tx.hash}
-                style={[styles.tableRow, index % 2 === 0 ? styles.tableRowAlt : {}]}
-              >
-                <Text style={styles.col1}>{formatDate(tx.timestamp)}</Text>
-                <Text style={styles.col2}>
-                  {tx.type === 'credit' ? 'Received' : 'Sent'}{' '}
-                  {formatTokenAmount(tx.formattedValue, 4)} {tx.token.symbol}
-                  {' '}({tx.chain.name})
+            {data.transactions.filter(tx => tx.type === 'credit').length > 0 ? (
+              data.transactions
+                .filter(tx => tx.type === 'credit')
+                .map((tx) => (
+                  <View key={tx.hash} style={styles.tableRow}>
+                    <Text style={{ width: '20%' }}>{formatDate(tx.timestamp)}</Text>
+                    <Text style={{ width: '60%' }}>
+                      Received {formatTokenAmount(tx.formattedValue, 4)} {tx.token.symbol} from {tx.from}
+                    </Text>
+                    <Text style={{ width: '20%', textAlign: 'right' }}>
+                      {formatCurrency(tx.usdValue)}
+                    </Text>
+                  </View>
+                ))
+            ) : (
+              <View style={styles.tableRow}>
+                <Text style={{ width: '100%', textAlign: 'center', fontStyle: 'italic', color: '#999' }}>
+                  No deposits during this period
                 </Text>
-                <Text style={styles.col3}>
-                  {tx.type === 'debit' ? formatCurrency(tx.usdValue) : '-'}
-                </Text>
-                <Text style={styles.col4}>
-                  {tx.type === 'credit' ? formatCurrency(tx.usdValue) : '-'}
-                </Text>
-                <Text style={styles.col5}>{formatCurrency(tx.runningBalance)}</Text>
               </View>
-            ))}
+            )}
+            <View style={[styles.tableRow, { borderTop: 2, borderTopColor: '#000', fontWeight: 'bold' }]}>
+              <Text style={{ width: '80%', fontWeight: 'bold', color: '#1976d2' }}>
+                Total deposits and other additions
+              </Text>
+              <Text style={{ width: '20%', textAlign: 'right', fontWeight: 'bold', color: '#1976d2' }}>
+                {formatCurrency(data.summary.totalDeposits)}
+              </Text>
+            </View>
           </View>
         </View>
 
-        {/* Activity Summary */}
+        {/* Withdrawals and Other Subtractions */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Activity Summary</Text>
-
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Total Deposits:</Text>
-            <Text>{formatCurrency(data.summary.totalDeposits)}</Text>
-          </View>
-
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Total Withdrawals:</Text>
-            <Text>{formatCurrency(data.summary.totalWithdrawals)}</Text>
-          </View>
-
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Number of Transactions:</Text>
-            <Text>{data.summary.transactionCount}</Text>
-          </View>
-
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Net Change:</Text>
-            <Text
-              style={{
-                color: data.summary.netChange >= 0 ? 'green' : 'red',
-                fontWeight: 'bold',
-              }}
-            >
-              {formatCurrency(data.summary.netChange)}
-            </Text>
+          <Text style={[styles.sectionTitle, { color: '#d32f2f' }]}>Withdrawals and other subtractions</Text>
+          <View style={styles.table}>
+            <View style={[styles.tableHeader, { backgroundColor: 'transparent', color: '#000', borderBottom: 2, borderBottomColor: '#000' }]}>
+              <Text style={{ width: '20%', color: '#000' }}>Date</Text>
+              <Text style={{ width: '60%', color: '#000' }}>Description</Text>
+              <Text style={{ width: '20%', textAlign: 'right', color: '#000' }}>Amount</Text>
+            </View>
+            {data.transactions.filter(tx => tx.type === 'debit').length > 0 ? (
+              data.transactions
+                .filter(tx => tx.type === 'debit')
+                .map((tx) => (
+                  <View key={tx.hash} style={styles.tableRow}>
+                    <Text style={{ width: '20%' }}>{formatDate(tx.timestamp)}</Text>
+                    <Text style={{ width: '60%' }}>
+                      Sent {formatTokenAmount(tx.formattedValue, 4)} {tx.token.symbol} to {tx.to}
+                    </Text>
+                    <Text style={{ width: '20%', textAlign: 'right' }}>
+                      {formatCurrency(tx.usdValue)}
+                    </Text>
+                  </View>
+                ))
+            ) : (
+              <View style={styles.tableRow}>
+                <Text style={{ width: '100%', textAlign: 'center', fontStyle: 'italic', color: '#999' }}>
+                  No withdrawals during this period
+                </Text>
+              </View>
+            )}
+            <View style={[styles.tableRow, { borderTop: 2, borderTopColor: '#000', fontWeight: 'bold' }]}>
+              <Text style={{ width: '80%', fontWeight: 'bold', color: '#1976d2' }}>
+                Total withdrawals and other subtractions
+              </Text>
+              <Text style={{ width: '20%', textAlign: 'right', fontWeight: 'bold', color: '#1976d2' }}>
+                {formatCurrency(data.summary.totalWithdrawals)}
+              </Text>
+            </View>
           </View>
         </View>
 

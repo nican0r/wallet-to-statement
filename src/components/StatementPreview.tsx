@@ -72,15 +72,8 @@ export const StatementPreview: React.FC<StatementPreviewProps> = ({ data, onBack
             <span className="font-semibold">Account Holder:</span>{' '}
             {data.accountHolder.name}
           </div>
-          <div>
-            <span className="font-semibold">Wallet:</span> {data.walletAddress}
-          </div>
           <div className="md:col-span-2">
             <span className="font-semibold">Address:</span> {data.accountHolder.address}
-          </div>
-          <div className="md:col-span-2">
-            <span className="font-semibold">Networks:</span>{' '}
-            {data.chains.map(c => c.name).join(', ')}
           </div>
           <div className="md:col-span-2">
             <span className="font-semibold">Period:</span>{' '}
@@ -90,125 +83,152 @@ export const StatementPreview: React.FC<StatementPreviewProps> = ({ data, onBack
         </div>
       </div>
 
-      {/* Balance Summary */}
       <div className="bg-gray-800 p-6 rounded-lg shadow-lg">
-        <h2 className="text-xl font-bold text-white mb-4">Balance Summary</h2>
-
-        <div className="space-y-4">
-          <div className="bg-blue-500/10 p-4 rounded-lg border border-blue-500">
-            <div className="flex justify-between items-center mb-2">
-              <span className="font-semibold text-white">Opening Balance</span>
-              <span className="text-2xl font-bold text-white">
-                {formatCurrency(data.openingBalance.totalUsdValue)}
-              </span>
-            </div>
-            <div className="space-y-1 text-sm text-gray-300">
-              {data.openingBalance.tokens.map((token, idx) => (
-                <div key={`open-${token.token.symbol}-${idx}`} className="flex justify-between">
-                  <span>
-                    {formatTokenAmount(token.formattedBalance)} {token.token.symbol}
-                    {token.chain && ` (${token.chain.name})`}
-                  </span>
-                  <span>{formatCurrency(token.usdValue)}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="bg-green-500/10 p-4 rounded-lg border border-green-500">
-            <div className="flex justify-between items-center mb-2">
-              <span className="font-semibold text-white">Closing Balance</span>
-              <span className="text-2xl font-bold text-white">
-                {formatCurrency(data.closingBalance.totalUsdValue)}
-              </span>
-            </div>
-            <div className="space-y-1 text-sm text-gray-300">
-              {data.closingBalance.tokens.map((token, idx) => (
-                <div key={`close-${token.token.symbol}-${idx}`} className="flex justify-between">
-                  <span>
-                    {formatTokenAmount(token.formattedBalance)} {token.token.symbol}
-                    {token.chain && ` (${token.chain.name})`}
-                  </span>
-                  <span>{formatCurrency(token.usdValue)}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Activity Summary */}
-      <div className="bg-gray-800 p-6 rounded-lg shadow-lg">
-        <h2 className="text-xl font-bold text-white mb-4">Activity Summary</h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="text-center">
-            <div className="text-2xl font-bold text-green-400">
-              {formatCurrency(data.summary.totalDeposits)}
-            </div>
-            <div className="text-sm text-gray-400">Total Deposits</div>
-          </div>
-          <div className="text-center">
-            <div className="text-2xl font-bold text-red-400">
-              {formatCurrency(data.summary.totalWithdrawals)}
-            </div>
-            <div className="text-sm text-gray-400">Total Withdrawals</div>
-          </div>
-          <div className="text-center">
-            <div className="text-2xl font-bold text-blue-400">
-              {data.summary.transactionCount}
-            </div>
-            <div className="text-sm text-gray-400">Transactions</div>
-          </div>
-          <div className="text-center">
-            <div
-              className={`text-2xl font-bold ${data.summary.netChange >= 0 ? 'text-green-400' : 'text-red-400'
-                }`}
-            >
-              {formatCurrency(data.summary.netChange)}
-            </div>
-            <div className="text-sm text-gray-400">Net Change</div>
-          </div>
-        </div>
-      </div>
-
-      {/* Transactions */}
-      <div className="bg-gray-800 p-6 rounded-lg shadow-lg">
-        <h2 className="text-xl font-bold text-white mb-4">
-          Transaction History ({data.transactions.length})
-        </h2>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-sm border-collapse">
             <thead className="bg-gray-700 text-gray-300">
               <tr>
-                <th className="px-4 py-3 text-left">Date</th>
-                <th className="px-4 py-3 text-left">Description</th>
-                <th className="px-4 py-3 text-right">Debit</th>
-                <th className="px-4 py-3 text-right">Credit</th>
-                <th className="px-4 py-3 text-right">Balance</th>
+                <th className="px-4 py-3 text-left border-b border-gray-600">Your Accounts</th>
+                <th className="px-4 py-3 text-left border-b border-gray-600">Account</th>
+                <th className="px-4 py-3 text-right border-b border-gray-600">Ending Balance</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-700">
-              {data.transactions.map((tx, index) => (
-                <tr key={tx.hash} className={index % 2 === 0 ? 'bg-gray-750' : ''}>
-                  <td className="px-4 py-3 text-gray-300">
-                    {formatDate(tx.timestamp)}
-                  </td>
-                  <td className="px-4 py-3 text-gray-300">
-                    {tx.type === 'credit' ? 'Received' : 'Sent'}{' '}
-                    {formatTokenAmount(tx.formattedValue, 4)} {tx.token.symbol} ({tx.chain.name})
-                  </td>
-                  <td className="px-4 py-3 text-right text-red-400">
-                    {tx.type === 'debit' ? formatCurrency(tx.usdValue) : '-'}
-                  </td>
-                  <td className="px-4 py-3 text-right text-green-400">
-                    {tx.type === 'credit' ? formatCurrency(tx.usdValue) : '-'}
-                  </td>
-                  <td className="px-4 py-3 text-right text-white font-semibold">
-                    {formatCurrency(tx.runningBalance)}
+            <tbody>
+              <tr className="border-b border-gray-700">
+                <td className="px-4 py-3 text-white font-medium">
+                  {data.accountHolder.accountName || 'Crypto Wallet'}
+                </td>
+                <td className="px-4 py-3 text-gray-300">{data.walletAddress}</td>
+                <td className="px-4 py-3 text-right text-white font-semibold">
+                  {formatCurrency(data.closingBalance.totalUsdValue)}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Account Summary */}
+      <div className="bg-gray-800 p-6 rounded-lg shadow-lg">
+        <h2 className="text-xl font-bold text-red-600 mb-4">Account Summary</h2>
+        <div className="space-y-3">
+          <div className="flex justify-between py-2 border-b border-gray-700">
+            <span className="text-gray-300">Beginning balance on {formatDate(data.statementPeriod.startDate)}</span>
+            <span className="text-white font-semibold">{formatCurrency(data.openingBalance.totalUsdValue)}</span>
+          </div>
+          <div className="flex justify-between py-2 border-b border-gray-700">
+            <span className="text-gray-300">Deposits and other additions</span>
+            <span className="text-green-400 font-semibold">{formatCurrency(data.summary.totalDeposits)}</span>
+          </div>
+          <div className="flex justify-between py-2 border-b border-gray-700">
+            <span className="text-gray-300">Withdrawals and other subtractions</span>
+            <span className="text-red-400 font-semibold">-{formatCurrency(data.summary.totalWithdrawals)}</span>
+          </div>
+          <div className="flex justify-between py-3 pt-4 border-t-2 border-blue-500">
+            <span className="text-lg font-bold text-white">Ending balance on {formatDate(data.statementPeriod.endDate)}</span>
+            <span className="text-lg font-bold text-blue-400">{formatCurrency(data.closingBalance.totalUsdValue)}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Deposits and Other Additions */}
+      <div className="bg-gray-800 p-6 rounded-lg shadow-lg">
+        <h2 className="text-xl font-bold text-red-600 mb-4">Deposits and other additions</h2>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm border-collapse">
+            <thead>
+              <tr className="border-b-2 border-gray-600">
+                <th className="px-4 py-3 text-left text-gray-300 font-normal">Date</th>
+                <th className="px-4 py-3 text-left text-gray-300 font-normal">Description</th>
+                <th className="px-4 py-3 text-right text-gray-300 font-normal">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.transactions.filter(tx => tx.type === 'credit').length > 0 ? (
+                data.transactions
+                  .filter(tx => tx.type === 'credit')
+                  .map((tx) => (
+                    <tr key={tx.hash} className="border-b border-gray-700">
+                      <td className="px-4 py-3 text-gray-300">
+                        {formatDate(tx.timestamp)}
+                      </td>
+                      <td className="px-4 py-3 text-gray-300">
+                        Received {formatTokenAmount(tx.formattedValue, 4)} {tx.token.symbol} from {tx.from}
+                      </td>
+                      <td className="px-4 py-3 text-right text-gray-300">
+                        {formatCurrency(tx.usdValue)}
+                      </td>
+                    </tr>
+                  ))
+              ) : (
+                <tr className="border-b border-gray-700">
+                  <td colSpan={3} className="px-4 py-6 text-center text-gray-500 italic">
+                    No deposits during this period
                   </td>
                 </tr>
-              ))}
+              )}
             </tbody>
+            <tfoot>
+              <tr className="border-t-2 border-gray-600">
+                <td colSpan={2} className="px-4 py-3 text-left font-bold text-blue-400">
+                  Total deposits and other additions
+                </td>
+                <td className="px-4 py-3 text-right font-bold text-blue-400">
+                  {formatCurrency(data.summary.totalDeposits)}
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+
+      {/* Withdrawals and Other Subtractions */}
+      <div className="bg-gray-800 p-6 rounded-lg shadow-lg">
+        <h2 className="text-xl font-bold text-red-600 mb-4">Withdrawals and other subtractions</h2>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm border-collapse">
+            <thead>
+              <tr className="border-b-2 border-gray-600">
+                <th className="px-4 py-3 text-left text-gray-300 font-normal">Date</th>
+                <th className="px-4 py-3 text-left text-gray-300 font-normal">Description</th>
+                <th className="px-4 py-3 text-right text-gray-300 font-normal">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.transactions.filter(tx => tx.type === 'debit').length > 0 ? (
+                data.transactions
+                  .filter(tx => tx.type === 'debit')
+                  .map((tx) => (
+                    <tr key={tx.hash} className="border-b border-gray-700">
+                      <td className="px-4 py-3 text-gray-300">
+                        {formatDate(tx.timestamp)}
+                      </td>
+                      <td className="px-4 py-3 text-gray-300">
+                        Sent {formatTokenAmount(tx.formattedValue, 4)} {tx.token.symbol} to {tx.to}
+                      </td>
+                      <td className="px-4 py-3 text-right text-gray-300">
+                        {formatCurrency(tx.usdValue)}
+                      </td>
+                    </tr>
+                  ))
+              ) : (
+                <tr className="border-b border-gray-700">
+                  <td colSpan={3} className="px-4 py-6 text-center text-gray-500 italic">
+                    No withdrawals during this period
+                  </td>
+                </tr>
+              )}
+            </tbody>
+            <tfoot>
+              <tr className="border-t-2 border-gray-600">
+                <td colSpan={2} className="px-4 py-3 text-left font-bold text-blue-400">
+                  Total withdrawals and other subtractions
+                </td>
+                <td className="px-4 py-3 text-right font-bold text-blue-400">
+                  {formatCurrency(data.summary.totalWithdrawals)}
+                </td>
+              </tr>
+            </tfoot>
           </table>
         </div>
       </div>

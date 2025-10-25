@@ -17,6 +17,7 @@ interface StatementFormProps {
 export const StatementForm: React.FC<StatementFormProps> = ({ onSubmit, loading = false, initialData }) => {
   const [accountHolderName, setAccountHolderName] = useState('');
   const [accountHolderAddress, setAccountHolderAddress] = useState('');
+  const [accountName, setAccountName] = useState('');
   const [walletAddress, setWalletAddress] = useState('');
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
@@ -29,6 +30,7 @@ export const StatementForm: React.FC<StatementFormProps> = ({ onSubmit, loading 
     if (initialData) {
       setAccountHolderName(initialData.accountHolder.name);
       setAccountHolderAddress(initialData.accountHolder.address);
+      setAccountName(initialData.accountHolder.accountName || '');
       setWalletAddress(initialData.walletAddress);
       setStartDate(format(initialData.statementPeriod.startDate, 'yyyy-MM-dd'));
       setEndDate(format(initialData.statementPeriod.endDate, 'yyyy-MM-dd'));
@@ -70,6 +72,7 @@ export const StatementForm: React.FC<StatementFormProps> = ({ onSubmit, loading 
       accountHolder: {
         name: accountHolderName,
         address: accountHolderAddress,
+        accountName: accountName || undefined,
       },
       walletAddress,
       statementPeriod: {
@@ -89,6 +92,15 @@ export const StatementForm: React.FC<StatementFormProps> = ({ onSubmit, loading 
         <h2 className="text-2xl font-bold text-white mb-6">Account Information</h2>
 
         <div className="space-y-4">
+          <Input
+            label="Account Name"
+            type="text"
+            value={accountName}
+            onChange={(e) => setAccountName(e.target.value)}
+            placeholder="e.g., Adv Plus Banking"
+            disabled={loading}
+          />
+
           <Input
             label="Account Holder Name"
             type="text"
