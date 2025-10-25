@@ -38,14 +38,42 @@ export const StatementPreview: React.FC<StatementPreviewProps> = ({ data, onBack
     <div className="max-w-4xl mx-auto space-y-6">
       {/* Header */}
       <div className="bg-gray-800 p-6 rounded-lg shadow-lg">
-        <div className="flex justify-between items-center">
-          <div>
+        <div className="flex justify-between items-start">
+          <div className="flex-1">
             <h1 className="text-3xl font-bold text-white mb-2">Statement Generated</h1>
-            <p className="text-gray-400">
+            <p className="text-gray-400 mb-4">
               Review your statement below and download when ready
             </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+              <div>
+                <p className="text-sm font-semibold text-gray-300 mb-2">Networks:</p>
+                <div className="flex flex-wrap gap-2">
+                  {data.chains.map((chain) => (
+                    <span
+                      key={chain.id}
+                      className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-500/20 text-blue-300 border border-blue-500/30"
+                    >
+                      {chain.name}
+                    </span>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-gray-300 mb-2">Tokens:</p>
+                <div className="flex flex-wrap gap-2">
+                  {data.tokens.map((token) => (
+                    <span
+                      key={token.symbol}
+                      className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-purple-500/20 text-purple-300 border border-purple-500/30"
+                    >
+                      {token.symbol}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
           </div>
-          <div className="flex gap-3">
+          <div className="flex gap-3 ml-4">
             <button
               onClick={handlePreviewInNewTab}
               className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
